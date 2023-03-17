@@ -5,6 +5,8 @@ https://developer.apple.com/library/content/documentation/NetworkingInternet/Con
 """
 
 from asgiref.sync import async_to_sync
+import asyncio
+from channels.db import database_sync_to_async
 import time
 
 from aioapns import (
@@ -121,18 +123,53 @@ def _apns_send(
         }
         # returns a dictionary mapping each token to its result. That
         # result is either "Success" or the reason for the failure.
-        return { token: send_async(client.send_notification, request) for token, request in enumerate(data)}
+        return send_async(client, data)
     else:
         request = NotificationRequest(
             registration_id,  # device_token
             _apns_prepare(registration_id, alert, **prepare_kwargs).dict(),  # message
             **notification_kwargs
         )
-        return send_async(client.send_notification, request)
+        return send_async(client, { registration_id: request }}
+        )
 
-@async_to_sync
-async def send_async(func, request):
-    await func(request)
+
+def send_async(client, requests):
+    response = []
+    print(requests)
+    async def execute():
+        try:
+            notifications = {}
+            for token, request in requests.items():
+                notifications[request.notification_id] = token
+                send_requests = [client.send_notification(request)]
+
+            t = time.time()
+            r = await asyncio.wait(send_requests)
+            if not r.is_successful:
+                await error_handling_async(r, notifications[r.notification_id])
+            response.append(r)
+        except Exception as e:
+            print(e)
+            raise e
+
+    loop = asyncio.get_event_loop()
+    coro = execute()
+    loop.run_until_complete(coro)
+    print(response[0])
+    return response[0]
+
+
+async def error_handling_async(response, registration_id):
+    if response.status == '410' and response.description == 'Unregistered':
+        await database_sync_to_async(remove_device)(registration_id)
+
+
+def remove_device(registration_id):
+    device = models.APNSDevice.objects.get(registration_id=registration_id)
+    device.active = False
+    device.save(update_fields=['active'])
+
 
 def apns_send_message(registration_id, alert, application_id=None, **kwargs):
     """
@@ -147,15 +184,14 @@ def apns_send_message(registration_id, alert, application_id=None, **kwargs):
     """
 
     try:
-        _apns_send(registration_id, alert, application_id=application_id, **kwargs)
-    # TODO
-    except APNSError as apns2_exception:
-        if str(apns2_exception) == 'Unregistered':
-            device = models.APNSDevice.objects.get(registration_id=registration_id)
-            device.active = False
-            device.save()
+        return _apns_send(registration_id, alert, application_id=application_id, **kwargs)
+    # TODO - Figure out what exceptions need to be caught here
+    except Exception as e:
+        print(e)
+        if str(e) == 'Unregistered':
+            remove_device(registration_id)
 
-        raise APNSServerError(status=apns2_exception.__class__.__name__)
+        raise APNSServerError(status=str(e))
 
 
 def apns_send_bulk_message(registration_ids, alert, application_id=None, **kwargs):
