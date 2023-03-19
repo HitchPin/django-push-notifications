@@ -114,7 +114,6 @@ class APNSPushPayloadTest(TestCase):
         with mock.patch('push_notifications.apns.APNs.__init__', return_value=None):
             with mock.patch('push_notifications.apns.APNs.send_notification', new=AsyncMock()):
                 with mock.patch('push_notifications.apns.NotificationRequest') as s:
-                    s.return_value=None
                     _apns_send('123', 'sample', collapse_id='456789')
                     args, kargs = s.call_args
                     assert s.called
