@@ -23,6 +23,7 @@ from .exceptions import APNSError, APNSServerError, APNSUnsupportedPriority
 DEFAULT_TTL = 2592000
 VALID_PRIORITIES = (PRIORITY_NORMAL, PRIORITY_HIGH)
 
+
 def _apns_create_socket(application_id=None):
     use_sandbox = get_manager().get_apns_use_sandbox(application_id)
     if not get_manager().has_auth_token_creds(application_id):
@@ -32,11 +33,7 @@ def _apns_create_socket(application_id=None):
         key_path, key_id, team_id = get_manager().get_apns_auth_creds(application_id)
         topic = (get_manager().get_apns_topic(application_id=application_id),)
         client = APNs(
-            key=key_path,
-            key_id=key_id,
-            team_id=team_id,
-            topic=topic,
-            use_sandbox=use_sandbox,
+            key=key_path, key_id=key_id, team_id=team_id, topic=topic, use_sandbox=use_sandbox,
         )
     return client
 
@@ -83,41 +80,53 @@ def _apns_prepare(
         mutable_content=mutable_content,
     )
 
-def _apns_send(
-    registration_id, alert, batch=False, application_id=None, **kwargs
-):
+
+def _apns_send(registration_id, alert, batch=False, application_id=None, **kwargs):
     client = _apns_create_socket(application_id=application_id)
 
     notification_kwargs = {}
-    prepare_kwarg_list = ['application_id', 'badge', 'sound', 'category', 'content_available', 'action_loc_key', 'loc_key', 'loc_args', 'extra', 'mutable_content', 'thread_id', 'url_args']
+    prepare_kwarg_list = [
+        'application_id',
+        'badge',
+        'sound',
+        'category',
+        'content_available',
+        'action_loc_key',
+        'loc_key',
+        'loc_args',
+        'extra',
+        'mutable_content',
+        'thread_id',
+        'url_args',
+    ]
     prepare_kwargs = {key: kwargs.get(key) for key in prepare_kwarg_list if kwargs.get(key)}
 
     time_to_live = None
     # if "expiration" is given, subtract the current time from it to get a TTL value in seconds
-    expiration = kwargs.pop("expiration", None)
+    expiration = kwargs.pop('expiration', None)
     if expiration:
         time_to_live = expiration
 
     # if time_to_live isn"t specified use 1 month from now
-    notification_kwargs["time_to_live"] = kwargs.pop("time_to_live", time_to_live)
-    if not notification_kwargs["time_to_live"]:
-        notification_kwargs["time_to_live"] = DEFAULT_TTL
+    notification_kwargs['time_to_live'] = kwargs.pop('time_to_live', time_to_live)
+    if not notification_kwargs['time_to_live']:
+        notification_kwargs['time_to_live'] = DEFAULT_TTL
 
-    priority = kwargs.pop("priority", PRIORITY_NORMAL)
+    priority = kwargs.pop('priority', PRIORITY_NORMAL)
     try:
         VALID_PRIORITIES.index(str(priority))
-        notification_kwargs["priority"] = priority
+        notification_kwargs['priority'] = priority
     except ValueError:
-        raise APNSUnsupportedPriority("Unsupported priority %d" % (priority))
+        raise APNSUnsupportedPriority(f'Unsupported priority {priority}')
 
-    notification_kwargs["collapse_key"] = kwargs.pop("collapse_id", None)
+    notification_kwargs['collapse_key'] = kwargs.pop('collapse_id', None)
 
     if batch:
         data = {
             rid: NotificationRequest(
                 rid,  # device_token
                 _apns_prepare(rid, alert, **prepare_kwargs).dict(),  # message
-                **notification_kwargs
+                **notification_kwargs,
             )
             for rid in registration_id
         }
@@ -128,15 +137,15 @@ def _apns_send(
         request = NotificationRequest(
             registration_id,  # device_token
             _apns_prepare(registration_id, alert, **prepare_kwargs).dict(),  # message
-            **notification_kwargs
+            **notification_kwargs,
         )
-        return send_async(client, { registration_id: request }}
-        )
+        return send_async(client, {registration_id: request})
 
 
 def send_async(client, requests):
     response = []
     print(requests)
+
     async def execute():
         try:
             notifications = {}
@@ -179,7 +188,7 @@ def apns_send_message(registration_id, alert, application_id=None, **kwargs):
     apns_send_bulk_message()
 
     Note that if set alert should always be a string. If it is not set,
-    it won"t be included in the notification. You will need to pass None
+    it won't be included in the notification. You will need to pass None
     to this for silent notifications.
     """
 
@@ -200,17 +209,13 @@ def apns_send_bulk_message(registration_ids, alert, application_id=None, **kwarg
     The registration_ids argument needs to be a list.
 
     Note that if set alert should always be a string. If it is not set,
-    it won"t be included in the notification. You will need to pass None
+    it won't be included in the notification. You will need to pass None
     to this for silent notifications.
     """
 
     results = _apns_send(
         registration_ids, alert, batch=True, application_id=application_id, **kwargs
     )
-    inactive_tokens = [
-        token for token, result in results.items() if result == "Unregistered"
-    ]
-    models.APNSDevice.objects.filter(registration_id__in=inactive_tokens).update(
-        active=False
-    )
+    inactive_tokens = [token for token, result in results.items() if result == 'Unregistered']
+    models.APNSDevice.objects.filter(registration_id__in=inactive_tokens).update(active=False)
     return results
