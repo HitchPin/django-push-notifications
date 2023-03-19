@@ -3,10 +3,7 @@ Apple Push Notification Service
 Documentation is available on the iOS Developer Library:
 https://developer.apple.com/library/content/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/APNSOverview.html
 """
-
-from asgiref.sync import async_to_sync
 import asyncio
-import time
 
 from aioapns import (
     APNs,
@@ -15,9 +12,11 @@ from aioapns import (
     PRIORITY_NORMAL,
 )
 
+from asgiref.sync import sync_to_async
+
 from . import models, payload
 from .conf import get_manager
-from .exceptions import APNSError, APNSServerError, APNSUnsupportedPriority
+from .exceptions import APNSServerError, APNSUnsupportedPriority
 
 DEFAULT_TTL = 2592000
 VALID_PRIORITIES = (PRIORITY_NORMAL, PRIORITY_HIGH)
@@ -171,7 +170,7 @@ def send_async(client, requests):
 
 async def error_handling_async(response, registration_id):
     if response.status == '410' and response.description == 'Unregistered':
-        await database_sync_to_async(remove_devices)((registration_id,))
+        await sync_to_async(remove_devices, thread_sensitive=True)((registration_id,))
 
 
 def remove_devices(inactive_tokens):
