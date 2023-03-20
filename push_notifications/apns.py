@@ -80,7 +80,8 @@ def _apns_prepare(
 
 
 def _apns_send(registration_id, alert, batch=False, application_id=None, **kwargs):
-    client = _apns_create_socket(application_id=application_id)
+    # If there's no loop, catch the RuntimeError and create a loop first
+    client = try_get_loop(func=_apns_create_socket, application_id=application_id)
 
     notification_kwargs = {}
     prepare_kwarg_list = [
@@ -134,9 +135,7 @@ def _apns_send(registration_id, alert, batch=False, application_id=None, **kwarg
     else:
         message = _apns_prepare(registration_id, alert, **prepare_kwargs).dict()  # message
         request = NotificationRequest(
-            registration_id,  # device_token
-            message,
-            **notification_kwargs,
+            registration_id, message, **notification_kwargs,  # device_token
         )
         print(request)
         return send_async(client, {registration_id: request})
@@ -161,13 +160,21 @@ def send_async(client, requests):
         except Exception as e:
             raise e
 
+    loop = try_get_loop()
+    loop.run_until_complete(execute())
+    return response
+
+
+def try_get_loop(*args, func=None, **kwargs):
     try:
-        loop = asyncio.get_event_loop()
+        if func:
+            return func(*args, **kwargs)
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    loop.run_until_complete(execute())
-    return response
+        if func:
+            return func(*args, **kwargs)
+        return loop
 
 
 async def error_handling_async(response, registration_id):
@@ -212,6 +219,4 @@ def apns_send_bulk_message(registration_ids, alert, application_id=None, **kwarg
     to this for silent notifications.
     """
 
-    return _apns_send(
-        registration_ids, alert, batch=True, application_id=application_id, **kwargs
-    )
+    return _apns_send(registration_ids, alert, batch=True, application_id=application_id, **kwargs)
