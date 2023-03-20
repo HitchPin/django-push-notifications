@@ -144,7 +144,6 @@ def _apns_send(registration_id, alert, batch=False, application_id=None, **kwarg
 
 def send_async(client, requests):
     response = []
-    print(requests)
 
     async def execute():
         try:
@@ -162,9 +161,12 @@ def send_async(client, requests):
         except Exception as e:
             raise e
 
-    loop = asyncio.get_event_loop()
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
     loop.run_until_complete(execute())
-    print(response)
     return response
 
 
