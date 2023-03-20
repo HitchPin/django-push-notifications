@@ -167,14 +167,11 @@ def send_async(client, requests):
 
 def try_get_loop(*args, func=None, **kwargs):
     try:
-        if func:
-            return func(*args, **kwargs)
+        return func(*args, **kwargs) if func else asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        if func:
-            return func(*args, **kwargs)
-        return loop
+        return func(*args, **kwargs) if func else loop
 
 
 async def error_handling_async(response, registration_id):
