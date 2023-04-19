@@ -12,6 +12,8 @@ from aioapns import (
     PRIORITY_NORMAL,
 )
 
+from asgiref.sync import async_to_sync
+
 from . import models, payload
 from .conf import get_manager
 from .exceptions import APNSServerError, APNSUnsupportedPriority
@@ -199,7 +201,7 @@ def apns_send_message(registration_id, alert, application_id=None, **kwargs):
     except Exception as e:
         print(e)
         if str(e) == 'Unregistered':
-            await remove_devices((registration_id,))
+            async_to_sync(remove_devices)((registration_id,))
 
         raise APNSServerError(status=str(e))
 
