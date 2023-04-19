@@ -176,11 +176,10 @@ def try_get_loop(*args, func=None, **kwargs):
 
 async def error_handling_async(response, registration_id):
     if response.status == '410' and response.description == 'Unregistered':
-        remove_devices((registration_id,))
+        sync_to_async(remove_devices, thread_sensitive=False)((registration_id,))
 
 
-@sync_to_async
-async def remove_devices(inactive_tokens):
+def remove_devices(inactive_tokens):
     models.APNSDevice.objects.filter(registration_id__in=inactive_tokens).update(active=False)
 
 
