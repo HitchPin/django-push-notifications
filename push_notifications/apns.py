@@ -176,7 +176,7 @@ def try_get_loop(*args, func=None, **kwargs):
 
 async def error_handling_async(response, registration_id):
     if response.status == '410' and response.description == 'Unregistered':
-        await sync_to_async(remove_devices, thread_sensitive=True)((registration_id,))
+        await sync_to_async(remove_devices)((registration_id,))
 
 
 def remove_devices(inactive_tokens):
