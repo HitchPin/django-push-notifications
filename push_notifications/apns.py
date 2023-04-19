@@ -12,7 +12,7 @@ from aioapns import (
     PRIORITY_NORMAL,
 )
 
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 
 from . import models, payload
 from .conf import get_manager
@@ -176,9 +176,10 @@ def try_get_loop(*args, func=None, **kwargs):
 
 async def error_handling_async(response, registration_id):
     if response.status == '410' and response.description == 'Unregistered':
-        await remove_devices((registration_id,))
+        remove_devices((registration_id,))
 
 
+@sync_to_async
 async def remove_devices(inactive_tokens):
     models.APNSDevice.objects.filter(registration_id__in=inactive_tokens).update(active=False)
 
@@ -201,7 +202,7 @@ def apns_send_message(registration_id, alert, application_id=None, **kwargs):
     except Exception as e:
         print(e)
         if str(e) == 'Unregistered':
-            async_to_sync(remove_devices)((registration_id,))
+            remove_devices((registration_id,))
 
         raise APNSServerError(status=str(e))
 
