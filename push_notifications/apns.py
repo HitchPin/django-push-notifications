@@ -12,8 +12,6 @@ from aioapns import (
     PRIORITY_NORMAL,
 )
 
-from asgiref.sync import sync_to_async
-
 from . import models, payload
 from .conf import get_manager
 from .exceptions import APNSServerError, APNSUnsupportedPriority
@@ -176,10 +174,10 @@ def try_get_loop(*args, func=None, **kwargs):
 
 async def error_handling_async(response, registration_id):
     if response.status == '410' and response.description == 'Unregistered':
-        await sync_to_async(remove_devices)((registration_id,))
+        await remove_devices((registration_id,))
 
 
-def remove_devices(inactive_tokens):
+async def remove_devices(inactive_tokens):
     models.APNSDevice.objects.filter(registration_id__in=inactive_tokens).update(active=False)
 
 
@@ -201,7 +199,7 @@ def apns_send_message(registration_id, alert, application_id=None, **kwargs):
     except Exception as e:
         print(e)
         if str(e) == 'Unregistered':
-            remove_devices((registration_id,))
+            await remove_devices((registration_id,))
 
         raise APNSServerError(status=str(e))
 
